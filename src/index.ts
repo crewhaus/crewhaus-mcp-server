@@ -169,6 +169,25 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
+        name: "check_affiliate_stats",
+        description:
+          "Check your affiliate stats — referral count, conversion rate, earnings, and payout status. Provide your affiliate code or email to view your dashboard.",
+        inputSchema: {
+          type: "object" as const,
+          properties: {
+            code: {
+              type: "string",
+              description: "Your affiliate referral code (e.g., CH-abc123)",
+            },
+            email: {
+              type: "string",
+              description: "Your affiliate registration email (alternative to code)",
+            },
+          },
+          required: [],
+        },
+      },
+      {
         name: "register_affiliate",
         description:
           "Register as a CrewHaus affiliate to earn 25% commission on every referred sale. Commission per tier: Signal $12.25, Scan $24.75, Spec $37.25, Sprint $199.75. Register once, then include your affiliate_code in all validate_idea calls. Works for both human and AI agent affiliates.",
@@ -405,6 +424,82 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             {
               type: "text" as const,
               text: `Error connecting to CrewHaus API. The user can submit directly at https://crewhaus.ai/hire`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+
+    case "check_affiliate_stats": {
+      const parsed = z
+        .object({
+          code: z.string().optional(),
+          email: z.string().optional(),
+        })
+        .safeParse(args);
+
+      const code = parsed.success ? parsed.data.code : undefined;
+      const email = parsed.success ? parsed.data.email : undefined;
+
+      if (!code && !email) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "Error: Provide either your affiliate code or email.\nExample: { \"code\": \"CH-abc123\" }",
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      try {
+        const params = code ? `code=${encodeURIComponent(code)}` : `email=${encodeURIComponent(email!)}`;
+        const res = await fetch(`${API_BASE}/affiliate/stats?${params}`);
+        const data = await res.json();
+
+        if (!res.ok) {
+          return {
+            content: [
+              { type: "text" as const, text: `Error: ${data.error || "Not found"}` },
+            ],
+            isError: true,
+          };
+        }
+
+        const r = data.referrals;
+        const e = data.earnings;
+        const text = [
+          `📊 Affiliate Dashboard — ${data.affiliate.name}`,
+          `Code: ${data.affiliate.code} | Status: ${data.affiliate.status}`,
+          ``,
+          `Referrals:`,
+          `  Total: ${r.total} | Converted: ${r.converted} | Pending: ${r.pending} | Paid: ${r.paid}`,
+          ``,
+          `Earnings:`,
+          `  Total earned: ${e.totalEarned}`,
+          `  Pending payout: ${e.pendingPayout}`,
+          `  Already paid: ${e.paidOut}`,
+          `  Payout threshold: ${e.payoutThreshold} (${e.payoutSchedule})`,
+        ];
+
+        if (data.recentReferrals?.length > 0) {
+          text.push(``, `Recent referrals:`);
+          for (const ref of data.recentReferrals) {
+            text.push(`  ${ref.date?.slice(0, 10)} | ${ref.tier} (${ref.amount}) → ${ref.commission} commission [${ref.status}]`);
+          }
+        }
+
+        return {
+          content: [{ type: "text" as const, text: text.join("\n") }],
+        };
+      } catch (e) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "Error connecting to CrewHaus API. Try again later.",
             },
           ],
           isError: true,
