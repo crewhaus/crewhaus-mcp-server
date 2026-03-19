@@ -1,6 +1,6 @@
 {
   "name": "crewhaus-mcp-server",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "mcpName": "io.github.crewhaus/validation",
   "description": "MCP server for CrewHaus startup validation services. Lets AI agents discover, price, and submit validation requests.",
   "type": "module",
